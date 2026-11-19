@@ -1,0 +1,33 @@
+{
+  "brand": "Incident Triage Workspace",
+  "networks": [
+    {
+      "name": "incident_triage",
+      "front_man": "triage",
+      "hocon": "./incident_triage.network.json",
+      "description": "Build an evidence-linked timeline from the current synthetic log."
+    }
+  ],
+  "llm_router": {
+    "base_url": "browser://mock",
+    "mock": true,
+    "model": "neuro-san-mock-browser"
+  },
+  "allowed_peers": [],
+  "peer_policy": {
+    "mode": "closed",
+    "deny_origins": []
+  },
+  "deployment": {
+    "mode": "static",
+    "self_contained_runtime": true,
+    "browser_mock": true
+  },
+  "actions": {
+    "version": 1,
+    "module": "./timeline-actions.mjs",
+    "agentTools": [
+      "build_timeline"
+    ]
+  }
+}

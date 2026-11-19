@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident Triage Workspace</title>
+<style>
+:root{color-scheme:dark;font:16px system-ui;background:#111820;color:#e3ebf3}
+body{max-width:1280px;margin:0 auto;padding:clamp(18px,4vw,54px)}
+h1{font-size:clamp(2rem,5vw,3.5rem);letter-spacing:-.055em;margin:.35em 0}
+h2{font-size:1.15rem;margin:0 0 12px}
+header{margin-bottom:28px}
+p{color:#b4c3d3}
+main{display:grid;gap:18px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+section{background:#19232e;border:1px solid #344250;border-radius:12px;padding:20px;min-width:0}
+textarea{box-sizing:border-box;width:100%;min-height:180px;background:#111820;color:inherit;padding:12px;border:1px solid #556679;border-radius:6px;font: .88rem monospace}
+button{background:#9ee5cc;color:#14271f;border:0;padding:10px 16px;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}
+input{box-sizing:border-box;width:100%;padding:8px;background:#111820;color:inherit;border:1px solid #556679;border-radius:6px;font:inherit}
+label span{display:block;margin:.6em 0 .25em}
+button:disabled{opacity:.55;cursor:wait}
+ol{padding-left:1.25em}
+li{padding:.55em .25em;overflow-wrap:anywhere}
+li:target{outline:2px solid #9ee5cc;background:#243a40;border-radius:4px}
+a{color:#9ee5cc}
+small,time{color:#b4c3d3}
+code{white-space:pre-wrap}
+@media(max-width:850px){main{grid-template-columns:1fr}}
+</style>
+<header><h1>Incident Triage Workspace</h1><p>Build a UTC timeline from test logs. Each event links to its source line.</p></header>
+<main>
+<section><h2><label for="log">Test log</label></h2><textarea id="log" spellcheck="false" aria-describedby="format"></textarea>
+<p id="format"><small>One event per line · ISO 8601 timestamp · INFO/WARN/ERROR/DEBUG · service · message</small></p>
+<button id="build" disabled>Build timeline</button>
+<button id="live" disabled>Run live demo</button>
+<p><small>Live demo uses the built-in synthetic log.</small></p>
+<p id="status" role="status"></p><h2>Source lines</h2><ol id="source"></ol></section>
+<section><h2>Incident timeline</h2><ol id="timeline"></ol></section>
+</main>
+<script type="module">
+import { Engine } from "./runtime/engine.js";
+import { sample } from './runtime.mjs';
+
+const log = document.querySelector('#log');
+const build = document.querySelector('#build');
+const live = document.querySelector('#live');
+const status = document.querySelector('#status');
+const source = document.querySelector('#source');
+const timeline = document.querySelector('#timeline');
+log.value = sample;
+
+function render({ lines, events, skipped }) {
+  source.replaceChildren(...lines.map((line, index) => {
+    const row = document.createElement('li');
+    row.id = 'L' + (index + 1);
+    row.tabIndex = -1;
+    const code = document.createElement('code');
+    code.textContent = line;
+    row.append(code);
+    return row;
+  }));
+  timeline.replaceChildren(...events.map(event => {
+    const row = document.createElement('li');
+    const time = document.createElement('time');
+    time.dateTime = new Date(event.timestamp).toISOString();
+    time.textContent = time.dateTime.replace('T', ' ').replace('.000Z', ' UTC');
+    const evidence = document.createElement('a');
+    evidence.href = '#L' + event.line;
+    evidence.textContent = 'Line ' + event.line;
+    row.append(time, document.createElement('br'), event.level + ' · ' + event.service + ' · ' + event.message + ' · ', evidence);
+    return row;
+  }));
+  status.textContent = events.length + ' events' + (skipped.length ? ' · Unparsed lines: ' + skipped.join(', ') : '');
+}
+
+const originUrl = new URL("./", location.href).href;
+const demoEngine = new Engine({ originUrl });
+
+async function buildWithReferenceRuntime(engine, useLiveModel = false) {
+  build.disabled = true;
+  live.disabled = true;
+  if (useLiveModel) log.value = sample;
+  log.readOnly = true;
+  status.textContent = useLiveModel ? 'Running Groq via nsDeploy…' : 'Running nsDeploy browser demo…';
+  let evidence;
+  const receiveEvidence = event => { evidence = event.detail; };
+  document.addEventListener('timeline-evidence', receiveEvidence);
+  try {
+    engine.resetHistory();
+    await engine.run('Build a timeline from the test log currently in this workspace.');
+    if (!evidence) throw new Error('nsDeploy did not return timeline evidence.');
+    const modelCalls = engine.trace.events.filter(event =>
+      event.kind === 'model_call' && event.phase === 'end' && event.verifiedReal);
+    if (useLiveModel && modelCalls.length !== 2) throw new Error('The live model cycle did not complete.');
+    render(evidence);
+    status.textContent += useLiveModel ? ' · Live GPT-OSS 20B via nsDeploy' : ' · nsDeploy browser demo (mock model)';
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    document.removeEventListener('timeline-evidence', receiveEvidence);
+    build.disabled = false;
+    live.disabled = false;
+    log.readOnly = false;
+  }
+}
+
+try {
+  await demoEngine.loadTop();
+  build.addEventListener('click', () => buildWithReferenceRuntime(demoEngine));
+  live.addEventListener('click', () => {
+    const engine = new Engine({
+      originUrl,
+      routerOverride: new URL('api/', originUrl).href,
+      byokKey: 'public-demo',
+      modelOverride: 'openai/gpt-oss-20b'
+    });
+    buildWithReferenceRuntime(engine, true);
+  });
+  await buildWithReferenceRuntime(demoEngine);
+} catch (error) {
+  status.textContent = error.message;
+}
+</script>
+</html>

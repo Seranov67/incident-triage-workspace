@@ -1,0 +1,19 @@
+{
+  "metadata": {"description": "Build evidence-linked timelines from synthetic operational logs."},
+  "tools": [
+    {
+      "name": "triage",
+      "function": {
+        "description": "Build a UTC timeline from the current workspace log.",
+        "parameters": {
+          "type": "object",
+          "properties": {"request": {"type": "string"}},
+          "required": ["request"],
+          "additionalProperties": false
+        }
+      },
+      "instructions": "Call website_build_timeline to read the current test log. Use only its evidence. Keep original source line numbers and do not infer causality.",
+      "tools": []
+    }
+  ]
+}
