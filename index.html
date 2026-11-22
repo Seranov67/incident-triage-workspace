@@ -28,16 +28,17 @@ code{white-space:pre-wrap}
 <header><h1>Incident Triage Workspace</h1><p>Build a UTC timeline from test logs. Each event links to its source line.</p></header>
 <main>
 <section><h2><label for="log">Test log</label></h2><textarea id="log" spellcheck="false" aria-describedby="format"></textarea>
-<p id="format"><small>One event per line · ISO 8601 timestamp · INFO/WARN/ERROR/DEBUG · service · message</small></p>
+<p id="format"><small>One event per line · ISO 8601 timestamp · TRACE/DEBUG/INFO/NOTICE/WARN/ERROR/CRITICAL/FATAL · service · message</small></p>
 <button id="build" disabled>Build timeline</button>
 <button id="live" disabled>Run live demo</button>
 <p><small>Live demo uses the built-in synthetic log.</small></p>
 <p id="status" role="status"></p><h2>Source lines</h2><ol id="source"></ol></section>
-<section><h2>Incident timeline</h2><ol id="timeline"></ol></section>
+<section><h2>Incident timeline</h2><ol id="timeline"></ol>
+<div id="summary-box" hidden><h2>Agent summary</h2><p><small>Written by the live model from the tool evidence. Line numbers above come from the parser, not the model.</small></p><p id="summary"></p></div></section>
 </main>
 <script type="module">
 import { Engine } from "./runtime/engine.js";
-import { sample } from './runtime.mjs';
+import { sample, formatUtc } from './runtime.mjs';
 
 const log = document.querySelector('#log');
 const build = document.querySelector('#build');
@@ -45,9 +46,13 @@ const live = document.querySelector('#live');
 const status = document.querySelector('#status');
 const source = document.querySelector('#source');
 const timeline = document.querySelector('#timeline');
+const summaryBox = document.querySelector('#summary-box');
+const summary = document.querySelector('#summary');
 log.value = sample;
 
 function render({ lines, events, skipped }) {
+  // A previous #Ln highlight would point at a different line after a rebuild.
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   source.replaceChildren(...lines.map((line, index) => {
     const row = document.createElement('li');
     row.id = 'L' + (index + 1);
@@ -61,7 +66,7 @@ function render({ lines, events, skipped }) {
     const row = document.createElement('li');
     const time = document.createElement('time');
     time.dateTime = new Date(event.timestamp).toISOString();
-    time.textContent = time.dateTime.replace('T', ' ').replace('.000Z', ' UTC');
+    time.textContent = formatUtc(event.timestamp);
     const evidence = document.createElement('a');
     evidence.href = '#L' + event.line;
     evidence.textContent = 'Line ' + event.line;
@@ -83,14 +88,20 @@ async function buildWithReferenceRuntime(engine, useLiveModel = false) {
   let evidence;
   const receiveEvidence = event => { evidence = event.detail; };
   document.addEventListener('timeline-evidence', receiveEvidence);
+  summaryBox.hidden = true;
+  summary.textContent = '';
   try {
     engine.resetHistory();
-    await engine.run('Build a timeline from the test log currently in this workspace.');
+    const answer = await engine.run('Build a timeline from the test log currently in this workspace.');
     if (!evidence) throw new Error('nsDeploy did not return timeline evidence.');
     const modelCalls = engine.trace.events.filter(event =>
       event.kind === 'model_call' && event.phase === 'end' && event.verifiedReal);
     if (useLiveModel && modelCalls.length !== 2) throw new Error('The live model cycle did not complete.');
     render(evidence);
+    if (useLiveModel && typeof answer === 'string' && answer.trim()) {
+      summary.textContent = answer.trim();
+      summaryBox.hidden = false;
+    }
     status.textContent += useLiveModel ? ' · Live GPT-OSS 20B via nsDeploy' : ' · nsDeploy browser demo (mock model)';
   } catch (error) {
     status.textContent = error.message;

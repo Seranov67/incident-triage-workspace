@@ -8,7 +8,13 @@ Turn a synthetic incident log into a UTC timeline with a link back to the origin
 2. Check the five events in UTC order. The source lines appear in the order **1 → 3 → 2 → 4 → 5**.
 3. Select **Line 3** to highlight the database connection-pool warning in the original log.
 
-**Build timeline** runs the browser demo and accepts pasted test logs in the format `ISO-8601 timestamp LEVEL service message`.
+**Build timeline** runs the browser demo and accepts pasted test logs in the format `ISO-8601 timestamp LEVEL service message` (levels: TRACE, DEBUG, INFO, NOTICE, WARN/WARNING, ERROR, CRITICAL, FATAL). Impossible timestamps such as `2026-02-30` or `24:00:00` are reported as unparsed lines instead of being silently rolled over. After a live run, the model's summary appears under **Agent summary**; event line numbers always come from the deterministic parser.
+
+## Tests
+
+```sh
+node --test
+```
 
 ## How it works
 

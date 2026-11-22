@@ -6,3 +6,4 @@ cognizant-submission/
 *.mp4
 *.wav
 *.srt
+.tools/
