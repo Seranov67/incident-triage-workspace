@@ -13,7 +13,9 @@ p{color:#b4c3d3}
 main{display:grid;gap:18px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 section{background:#19232e;border:1px solid #344250;border-radius:12px;padding:20px;min-width:0}
 textarea{box-sizing:border-box;width:100%;min-height:180px;background:#111820;color:inherit;padding:12px;border:1px solid #556679;border-radius:6px;font: .88rem monospace}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
 button{background:#9ee5cc;color:#14271f;border:0;padding:10px 16px;border-radius:6px;font:inherit;font-weight:700;cursor:pointer}
+button.secondary{background:#243242;color:#e3ebf3;border:1px solid #485b6e;font-weight:600}
 input{box-sizing:border-box;width:100%;padding:8px;background:#111820;color:inherit;border:1px solid #556679;border-radius:6px;font:inherit}
 label span{display:block;margin:.6em 0 .25em}
 button:disabled{opacity:.55;cursor:wait}
@@ -23,14 +25,21 @@ li:target{outline:2px solid #9ee5cc;background:#243a40;border-radius:4px}
 a{color:#9ee5cc}
 small,time{color:#b4c3d3}
 code{white-space:pre-wrap}
+.badge{display:inline-block;padding:1px 7px;border-radius:4px;font:700 .78rem monospace;letter-spacing:.02em}
+.lvl-error{background:#4b1d24;color:#ffb4be;border:1px solid #8c3542}
+.lvl-warn{background:#433214;color:#ffd584;border:1px solid #7d5d25}
+.lvl-info{background:#1b3544;color:#a7d8f5;border:1px solid #315e78}
 @media(max-width:850px){main{grid-template-columns:1fr}}
 </style>
 <header><h1>Incident Triage Workspace</h1><p>Build a UTC timeline from test logs. Each event links to its source line.</p></header>
 <main>
 <section><h2><label for="log">Test log</label></h2><textarea id="log" spellcheck="false" aria-describedby="format"></textarea>
 <p id="format"><small>One event per line · ISO 8601 timestamp · TRACE/DEBUG/INFO/NOTICE/WARN/ERROR/CRITICAL/FATAL · service · message</small></p>
+<div class="actions">
 <button id="build" disabled>Build timeline</button>
 <button id="live" disabled>Run live demo</button>
+<button id="reset" class="secondary" type="button" disabled>Reset sample</button>
+</div>
 <p><small>Live demo uses the built-in synthetic log.</small></p>
 <p id="status" role="status"></p><h2>Source lines</h2><ol id="source"></ol></section>
 <section><h2>Incident timeline</h2><ol id="timeline"></ol>
@@ -43,12 +52,19 @@ import { sample, formatUtc } from './runtime.mjs';
 const log = document.querySelector('#log');
 const build = document.querySelector('#build');
 const live = document.querySelector('#live');
+const reset = document.querySelector('#reset');
 const status = document.querySelector('#status');
 const source = document.querySelector('#source');
 const timeline = document.querySelector('#timeline');
 const summaryBox = document.querySelector('#summary-box');
 const summary = document.querySelector('#summary');
 log.value = sample;
+
+function levelClass(level) {
+  if (['ERROR', 'CRITICAL', 'FATAL'].includes(level)) return 'badge lvl-error';
+  if (['WARN', 'WARNING'].includes(level)) return 'badge lvl-warn';
+  return 'badge lvl-info';
+}
 
 function render({ lines, events, skipped }) {
   // A previous #Ln highlight would point at a different line after a rebuild.
@@ -67,10 +83,17 @@ function render({ lines, events, skipped }) {
     const time = document.createElement('time');
     time.dateTime = new Date(event.timestamp).toISOString();
     time.textContent = formatUtc(event.timestamp);
+    const badge = document.createElement('span');
+    badge.className = levelClass(event.level);
+    badge.textContent = event.level;
     const evidence = document.createElement('a');
     evidence.href = '#L' + event.line;
     evidence.textContent = 'Line ' + event.line;
-    row.append(time, document.createElement('br'), event.level + ' · ' + event.service + ' · ' + event.message + ' · ', evidence);
+    evidence.addEventListener('click', () => {
+      const target = document.querySelector('#L' + event.line);
+      target?.focus();
+    });
+    row.append(time, document.createElement('br'), badge, ' · ' + event.service + ' · ' + event.message + ' · ', evidence);
     return row;
   }));
   status.textContent = events.length + ' events' + (skipped.length ? ' · Unparsed lines: ' + skipped.join(', ') : '');
@@ -82,6 +105,7 @@ const demoEngine = new Engine({ originUrl });
 async function buildWithReferenceRuntime(engine, useLiveModel = false) {
   build.disabled = true;
   live.disabled = true;
+  reset.disabled = true;
   if (useLiveModel) log.value = sample;
   log.readOnly = true;
   status.textContent = useLiveModel ? 'Running Groq via nsDeploy…' : 'Running nsDeploy browser demo…';
@@ -109,6 +133,7 @@ async function buildWithReferenceRuntime(engine, useLiveModel = false) {
     document.removeEventListener('timeline-evidence', receiveEvidence);
     build.disabled = false;
     live.disabled = false;
+    reset.disabled = false;
     log.readOnly = false;
   }
 }
@@ -116,6 +141,10 @@ async function buildWithReferenceRuntime(engine, useLiveModel = false) {
 try {
   await demoEngine.loadTop();
   build.addEventListener('click', () => buildWithReferenceRuntime(demoEngine));
+  reset.addEventListener('click', () => {
+    log.value = sample;
+    buildWithReferenceRuntime(demoEngine);
+  });
   live.addEventListener('click', () => {
     const engine = new Engine({
       originUrl,

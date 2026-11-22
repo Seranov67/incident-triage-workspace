@@ -7,7 +7,7 @@ export const sample = `2026-11-19T09:00:00Z INFO deploy Release 2.4 started
 export const LEVELS = ['TRACE', 'DEBUG', 'INFO', 'NOTICE', 'WARN', 'WARNING', 'ERROR', 'CRITICAL', 'FATAL'];
 
 const LINE = new RegExp(`^(\\S+)\\s+(${LEVELS.join('|')})\\s+(\\S+)\\s+(.+)$`, 'i');
-const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/;
+const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/i;
 
 // Date.parse silently rolls impossible values forward (2026-02-30 -> 2026-03-02,
 // 24:00 -> next day). An evidence timeline must reject them instead.
