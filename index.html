@@ -43,7 +43,7 @@ code{white-space:pre-wrap}
 <p><small>Live demo uses the built-in synthetic log.</small></p>
 <p id="status" role="status"></p><h2>Source lines</h2><ol id="source"></ol></section>
 <section><h2>Incident timeline</h2><ol id="timeline"></ol>
-<div id="summary-box" hidden><h2>Agent summary</h2><p><small>Written by the live model from the tool evidence. Line numbers above come from the parser, not the model.</small></p><p id="summary"></p></div></section>
+<div id="summary-box" hidden><h2>Agent summary</h2><p><small>Summarized from the source log returned by the live nsDeploy run. Times are shown in UTC.</small></p><p id="summary"></p></div></section>
 </main>
 <script type="module">
 import { Engine } from "./runtime/engine.js";
@@ -116,14 +116,25 @@ async function buildWithReferenceRuntime(engine, useLiveModel = false) {
   summary.textContent = '';
   try {
     engine.resetHistory();
-    const answer = await engine.run('Build a timeline from the test log currently in this workspace.');
+    await engine.run('Build a timeline from the test log currently in this workspace.');
     if (!evidence) throw new Error('nsDeploy did not return timeline evidence.');
     const modelCalls = engine.trace.events.filter(event =>
       event.kind === 'model_call' && event.phase === 'end' && event.verifiedReal);
     if (useLiveModel && modelCalls.length !== 2) throw new Error('The live model cycle did not complete.');
     render(evidence);
-    if (useLiveModel && typeof answer === 'string' && answer.trim()) {
-      summary.textContent = answer.trim();
+    if (useLiveModel) {
+      const { events } = evidence;
+      if (events.length === 0) {
+        summary.textContent = 'No valid events in the source log.';
+      } else {
+        const first = events[0];
+        const last = events[events.length - 1];
+        const firstEvent = `${formatUtc(first.timestamp)} (line ${first.line})`;
+        const lastEvent = `${formatUtc(last.timestamp)} (line ${last.line})`;
+        summary.textContent = events.length === 1
+          ? `1 event at ${firstEvent}.`
+          : `${events.length} events from ${firstEvent} to ${lastEvent}.`;
+      }
       summaryBox.hidden = false;
     }
     status.textContent += useLiveModel ? ' · Live GPT-OSS 20B via nsDeploy' : ' · nsDeploy browser demo (mock model)';
